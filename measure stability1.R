@@ -1,40 +1,87 @@
-#create a function
-stability <- function(stack1, stack2) {
+library(raster)
+
+##create a function
+stability.func <- function(stack1, stack2) {
   #create new raster stack
-  
+  new.stack <- stack1
+  new.stack[] <- NA
   
   #loop through cells
+    for (i in 1:ncell(new.stack)){
+    #perform calculation for each stack
+    new.stack[i] <- abs(stack1[i]-stack2[i]) 
+  }
   
+    #add all layers together
+  added_raster <- sum(new.stack)
+
+  
+}
+
+
+##test the function with fake rasters
+df1 <- matrix(c(2, 5, 6, 8, 9, 4), nrow = 3, ncol=3)
+df2 <- matrix(c(1, 3, 5, 1, 6, 4), nrow = 3, ncol=3)
+df3 <- matrix(c(7, 8, 7, 2, 1, 3), nrow = 3, ncol=3)
+df4 <- matrix(c(0, 1, 2, 4, 5, 8), nrow = 3, ncol=3)
+
+rast1 <- raster(df1)
+rast2 <- raster(df2)
+rast3 <- raster(df3)
+rast4 <- raster(df4)
+
+stack.a <- stack(rast1, rast2)
+stack.b <- stack(rast3, rast4)
+
+test_raster <- stability.func(stack.a, stack.b)
+View(test_raster)
+
+##read in data
+#folder name
+data_folder <- "//franklin.uds.anu.edu.au/home/u5596907/My Documents/Identifying stability/Data/transformed rasters/"
+
+#read in current time data
+rasters <- list.files(path = data_folder, pattern = "present")
+rasters <- sort(rasters)
+rasters <- paste(data_folder, rasters, sep="")
+rasters.present <- stack(rasters)
+
+#read in past time data
+rasters <- list.files(path = data_folder, pattern = "002kya")
+rasters <- sort(rasters)
+rasters <- paste(data_folder, rasters, sep="")
+rasters.002 <- stack(rasters)
+
+stability.002 <- stability.func1(rasters.present, rasters.002)
+
+
+
+##create a function
+stability.func1 <- function(stack1, stack2) {
+  #create new raster stack
+  new.stack <- stack1
+  new.stack[] <- NA
   
   #perform calculation for each stack
-  new.stack[[i]] <- abs(stack1[[i]]-stack2[[i]])
-  
+    new.stack <- abs(stack1-stack2) 
   
   #add all layers together
-  added_raster <- ...
+  added_raster <- sum(new.stack)
   
-  #give the raster a name based on input
-  assign(paste0("stabilityraster", stack2), added_raster)
   
 }
 
 
 
-#test by making fake rasters
-df1 <- data.frame( x = rep( 0:1, each=2 ),
-                  y = rep( 0:1,  2),
-                  l = rep( 0:3,  1))
+test_raster <- stability.func1(stack.a, stack.b)
+View(test_raster)
 
-df2 <- data.frame( x = rep( 1:2, each=2 ),
-                  y = rep( 0:1,  2),
-                  l = rep( 1:4,  1))
 
-df3 <- data.frame( x = rep( 5:6, each=2 ),
-                  y = rep( 4:5,  2),
-                  l = rep( 0:3,  1))
 
-df4 <- data.frame( x = rep( 6:7, each=2 ),
-                  y = rep( 0:1,  2),
-                  l = rep( 4:7,  1))
 
-rast1 <- as.raster(df1)
+##extra bits of code
+#give the raster a name based on input
+assign(paste0("stabilityraster", deparse(substitute(stack.b))), added_raster)
+
+
+
