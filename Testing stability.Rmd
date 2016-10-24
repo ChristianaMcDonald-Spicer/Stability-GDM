@@ -1,0 +1,584 @@
+---
+title: "Testing Stability"
+author: "Christiana McDonald-Spicer"
+date: "20 October 2016"
+output: pdf_document
+---
+#Testing stability
+
+This calculates the stability for a site and also maps general patterns of dissimilarity to the present. See also the R scripts "Testing\\_Stability\\_for\\_a\\_Site" and "Mapping_Stability".
+
+Stability plotted for individual cells is both static stability (a cell compared to itself through time) and buffer stability (looking at a radius around a single cell through time).
+
+##Read in the data
+
+First of all load the packages required.
+
+```{r, message=FALSE}
+library(raster)
+```
+
+Set the folder containing the rasters transformed from the GDM. Each raster must contain the name of the time period, as given in "time_periods" below. The folder must also contain data from the present day, with "present" in the name
+
+```{r}
+data_folder <- "C:/Users/Christiana/Documents/Identifying stability/Data/transformed rasters/"
+```
+
+Set up a vector of all the time periods included in the analysis (not including the present day).
+
+```{r}
+time_periods <- c("002", "004", "006", "008", "010", "012", "014", "016", "018", "020", "022", "024", "026", "028", "030", "032", "034", "036", "038", "040", "042", "044", "046", "048", "050", "052", "054", "056", "058", "060", "062", "064", "066", "068", "070", "072", "074", "076", "078", "080", "084", "088", "092", "096", "100", "108", "112", "116", "120")
+```
+
+Find and create a raster stack of the files for the present day. The layers are sorted alphabetically to ensure they will be in the same order for all the time periods.
+
+```{r}
+rasters <- list.files(path = data_folder, pattern = "present")
+rasters <- sort(rasters)
+rasters <- paste(data_folder, rasters, sep="")
+rasters.present <- stack(rasters)
+```
+
+\newpage
+
+##Compare time periods to present
+
+Here we compare each time period to the present day. We also summarise all the variables into one layer for each time period.
+
+First of all, we create a function to compare the time periods to today. This first calculates the difference between the two time periods for each variable (layer in the stacks). It then takes the absolute value of this, before adding all the layers in the new stack together to create a summary of the dissimilarity for that time period.
+
+```{r}
+stab.func <- function(stack1, stack2) {
+  #create new raster stack
+  new.stack <- stack1
+  new.stack[] <- NA
+  
+  #perform calculation for each stack
+  new.stack <- abs(stack1-stack2) 
+  
+  #add all layers together
+  added_raster <- sum(new.stack)
+}
+```
+
+We then create another function, which reads each of the past time periods into the function we just created. It then applies the GDM link function to each cell, to get a value between 0 and -1.
+
+```{r}
+run.stab.func <- function(present, time, folder){
+  #read in and stack the files for the relevant time period
+  rasters <- list.files(path = folder, pattern = time)
+  rasters <- sort(rasters)
+  rasters <- paste(data_folder, rasters, sep="")
+  stack_rasters <- stack(rasters)
+  
+  #apply stability fuction
+  result <- stab.func(present, stack_rasters)
+  
+  #apply GDM link function
+  result <- 1 - exp(result)
+}
+```
+
+Now that we have these two functions, we can run them to calculate the dissimilarity of the species assemblages in each time period to the present.
+
+```{r}
+for (i in time_periods) {
+  #run the analysis
+  result <- run.stab.func(rasters.present, i, data_folder)
+  
+  #give the output a relevant name
+  assign(paste0("stability.", i), result)
+  }
+```
+
+Finally, we will stack the output rasters.
+
+```{r}
+stab.rasters <- stack(mget(ls(pattern = "stability")))
+```
+
+
+\newpage
+
+##Looking at stability in a single cell
+
+Now we have the stability for each time period summarised, we can look at the stability in a single cell over time. In this example we will use Katherine (NT).
+
+First set the coordinates and format them as SpatialPoints.
+
+```{r}
+coords <- data.frame(132.27, -14.45)
+points <- coords
+colnames(points) <- c("lon", "lat")
+coordinates(points) <- c("lon", "lat")
+```
+
+We also need to set a buffer for looking at a radius around a cell. This is measured in the units of your raster files, usually metres.
+
+```{r}
+buffer <- 50000
+```
+
+Now we have everything set up, we will extract the data for static stability (comparing a single cell to itself through time), and add in details for the present day.
+
+```{r}
+stability.df <- data.frame(extract(stab.rasters, points))
+colnames(stability.df) <- time_periods
+stability.df <- cbind("000" = 0, stability.df)
+```
+
+We also want to add the present day into our list of time periods.
+
+```{r}
+n <- c(0)
+time_periods_0 <- c(n, time_periods)
+```
+
+Now we can make a second dataframe with the data using our buffer (comparing the present day to the cell within that radius that is most similar to the current assemblage)
+
+```{r, warning=FALSE}
+buffer.df <- extract(stab.rasters, points, buffer = buffer, fun=max)
+colnames(buffer.df) <- time_periods
+buffer.df <- cbind("000" = 0, buffer.df)
+```
+
+Combine the two dataframes together with the time periods.
+
+```{r}
+stability.df2 <- rbind(stability.df, time_periods_0, buffer.df)
+stability.df2 <- t(stability.df2)
+colnames(stability.df2) <- c("static", "time", "buffer")
+stability.df2 <- stability.df2[,c("time", "static", "buffer")]
+```
+
+A bit of housekeeping to make sure the dataframe is in the correct format.
+
+```{r}
+stability.df2 <- as.data.frame(stability.df2)
+stability.df2$static <- as.numeric(as.character(stability.df2$static))
+stability.df2$time <- as.numeric(as.character(stability.df2$time))
+stability.df2$buffer <- as.numeric(as.character(stability.df2$buffer))
+head(stability.df2)
+```
+
+Finally we can plot the data.
+
+```{r, echo=FALSE, fig.align='center', fig.cap="Figure 1: Stability over time present-120kya"}
+##Set up the plot using the static suitability measure
+plot(stability.df2$time, stability.df2$static, type = "l", 
+     xlab="Time (kya)", ylab="Dissimilarity to present", 
+     xlim=(c(min(stability.df2$time), max(stability.df2$time))),
+     #xlim=(c(min(stability.df2$time), 80)),
+     #ylim=c(-0.3, 0), 
+     col="blue") 
+
+##Plot the buffer suitability on the same plot
+lines(stability.df2$time, stability.df2$buffer, type="l", 
+      xlim=(c(min(stability.df2$time), max(stability.df2$time))),
+      #xlim=(c(min(stability.df2$time), 80)),
+      xlim=(c(5, 40)),
+      col="darkmagenta")
+
+##Include a legend
+legend("bottomleft",
+       c("Static", paste("Buffer of", buffer, "m")), # puts text in the legend
+       lty=c(1,1), # gives the legend appropriate symbols (lines)
+       lwd=c(2.5,2.5),col=c("blue", "darkmagenta")) # gives the legend lines the correct color and width
+
+##Create a title
+title(paste("Stability over time for", paste0(as.character(coords[1]), ","), as.character(coords[2])))
+```
+
+We can also plot from just 80kya, as the data between 80 and 120kya doesn't look credible.
+
+```{r, echo=FALSE, fig.align='center', fig.cap="Figure 2: Stability over time present-80kya"}
+##Set up the plot using the static suitability measure
+plot(stability.df2$time, stability.df2$static, type = "l", 
+     xlab="Time (kya)", ylab="Dissimilarity to present", 
+     #xlim=(c(min(stability.df2$time), max(stability.df2$time))),
+     xlim=(c(min(stability.df2$time), 80)),
+     #ylim=c(-0.3, 0), 
+     col="blue") 
+
+##Plot the buffer suitability on the same plot
+lines(stability.df2$time, stability.df2$buffer, type="l", 
+      #xlim=(c(min(stability.df2$time), max(stability.df2$time))),
+      xlim=(c(min(stability.df2$time), 80)),
+      xlim=(c(5, 40)),
+      col="darkmagenta")
+
+##Include a legend
+legend("bottomleft",
+       c("Static", paste("Buffer of", buffer, "m")), # puts text in the legend
+       lty=c(1,1), # gives the legend appropriate symbols (lines)
+       lwd=c(2.5,2.5),col=c("blue", "darkmagenta")) # gives the legend lines the correct color and width
+
+##Create a title
+title(paste("Stability over time for", paste0(as.character(coords[1]), ","), as.character(coords[2])))
+```
+
+\newpage
+
+##Plotting maps of stability
+
+There are four metrics I am looking at currently - arithemetic mean, standard deviation, range and geometric mean.
+
+First I crop the rasters to my study region (the one used to fit the GDM originally). This makes it faster to calculate and easier to view the patterns in the plots.
+
+```{r}
+study_extent <- c(111, 156, -25.5, -9.008331)
+stab.rasters.crop <- crop(stab.rasters, study_extent)
+```
+
+Then I can calculate the arithmetic mean:
+
+```{r}
+stab_arithmean <- calc(stab.rasters.crop, fun=mean)
+```
+```{r, echo=FALSE, fig.align='center', fig.cap="Figure 3: Arithmetic mean of dissimilarity. More negative means more dissimilar"}
+plot(stab_arithmean, col=terrain.colors(255))
+```
+
+The standard deviation: 
+
+```{r}
+stab_sdev <- calc(stab.rasters.crop, fun=sd)
+```
+```{r, echo=FALSE, fig.align='center', fig.cap="Figure 4: Standard deviation of dissimilarity. More negative means more dissimilar"}
+plot(stab_sdev, col=terrain.colors(255))
+```
+
+The range:
+
+```{r}
+stab_range <- calc(stab.rasters.crop, fun=function(x){max(x)-min(x)})
+```
+```{r, echo=FALSE, fig.align='center', fig.cap="Figure 5: Range of dissimilarity. More negative means more dissimilar"}
+plot(stab_range, col=terrain.colors(255))
+```
+
+And the geometric mean. As the geometric mean cannot be calculated with negative numbers, this function first takes the absolute value. 
+
+```{r}
+stab_geomean <- calc(stab.rasters.crop, fun=function(x){exp(mean(log(abs(x))))})
+```
+```{r, echo=FALSE, fig.align='center', fig.cap="Figure 6: Geometric mean of dissimilarity. More negative means more dissimilar"}
+plot(stab_geomean, col=terrain.colors(255))
+```
+
+The patterns seen here may be impacted by endemic species with small ranges in the areas of high dissimilarity?
+
+\newpage
+
+##Plotting Bioclim variables through time
+
+We can do similar plots for the bioclim variables used in the GDM.
+
+As we have already set up our study extent and coordinates, we just need to read in the rasters for each time period. This is working with the raw data, not the transformed layers.
+
+```{r, warning=FALSE, message=FALSE}
+folder <- "C:/Users/Christiana/Documents/gdm/past layers/"
+bioclim.layer <- "bioclim_12"
+bioclim <- list()
+
+for (i in time_periods){
+  bioclim[i] <- list.files(path = paste0(folder, i, "/"), pattern = bioclim.layer, 
+                            all.files=TRUE, full.names=TRUE)
+}
+bioclim <- unlist(bioclim)
+bioclim <- sort(bioclim)
+stack_bioclim <- stack(bioclim)
+stack_bioclim <- crop(stack_bioclim, study_extent)
+```
+
+We also need to read in the current data.
+```{r}
+present_bioclim <- raster("C:/Users/Christiana/Documents/gdm/present_layers/bioclim_12.asc")
+present_bioclim <- crop(present_bioclim, study_extent)
+present_max <- maxValue(present_bioclim)
+present_max
+present_min <- minValue(present_bioclim)
+present_min
+```
+
+We then extract the data for our point as we did earlier.
+
+```{r, warning=FALSE}
+bioclim.df <- data.frame(extract(stack_bioclim, points))
+colnames(bioclim.df) <- time_periods
+
+buffer.bioclim.df <- extract(stack_bioclim, points, buffer = buffer, fun=max)
+buffer.bioclim.df <- t(buffer.bioclim.df)
+
+bioclim.df2 <- rbind(bioclim.df, time_periods)
+bioclim.df2 <- t(bioclim.df2)
+bioclim.df2 <- cbind(bioclim.df2, buffer.bioclim.df)
+
+colnames(bioclim.df2) <- c("static", "time", "buffer")
+bioclim.df2 <- bioclim.df2[,c("time", "static", "buffer")]
+
+bioclim.df2 <- as.data.frame(bioclim.df2)
+bioclim.df2$static <- as.numeric(as.character(bioclim.df2$static))
+bioclim.df2$time <- as.numeric(as.character(bioclim.df2$time))
+bioclim.df2$buffer <- as.numeric(as.character(bioclim.df2$buffer))
+head(bioclim.df2)
+```
+
+Then we plot it. The straight lines show the maximum and minimum values in the training data.
+
+```{r, echo=FALSE, fig.align='center', fig.cap="Figure 7: Plot of Annual Precipitation for Katherine"}
+y_min <- (min(c(bioclim.df2$static, present_min))-10)
+y_max <- (max(c(bioclim.df2$buffer), present_max)+200)
+
+plot(bioclim.df2$time, bioclim.df2$static, type = "l", 
+     xlab="Time (kya)", ylab="Annual Precipitation", 
+     xlim=(c(min(bioclim.df2$time), max(bioclim.df2$time))),
+     ylim=(c(y_min, y_max)),
+     col="blue") 
+
+abline(h=present_min)
+abline(h=present_max)
+
+lines(bioclim.df2$time, bioclim.df2$buffer, type="l",
+      xlim=(c(min(bioclim.df2$time), max(bioclim.df2$time))),
+      ylim=(c(y_min, y_max)),
+      col="darkmagenta")
+
+legend("topright",
+       c("Static", paste("Buffer of", buffer, "m")), # puts text in the legend
+       lty=c(1,1), # gives the legend appropriate symbols (lines)
+       lwd=c(2.5,2.5),col=c("blue", "darkmagenta")) # gives the legend lines the correct color and width
+```
+
+Do the same thing to plot the other Bioclim variables used:
+
+```{r, echo=FALSE, warning=FALSE, fig.align='center', fig.cap="Figure 8: Plot of Temperature Seasonality for Katherine"}
+bioclim.layer <- "bioclim_04"
+folder <- "C:/Users/Christiana/Documents/gdm/past layers/"
+bioclim <- list()
+
+for (i in time_periods){
+  bioclim[i] <- list.files(path = paste0(folder, i, "/"), pattern = bioclim.layer, 
+                            all.files=TRUE, full.names=TRUE)
+}
+bioclim <- unlist(bioclim)
+bioclim <- sort(bioclim)
+stack_bioclim <- stack(bioclim)
+stack_bioclim <- crop(stack_bioclim, study_extent)
+
+present_bioclim <- raster("C:/Users/Christiana/Documents/gdm/present_layers/bioclim_04.asc")
+present_bioclim <- crop(present_bioclim, study_extent)
+present_max <- maxValue(present_bioclim)
+present_min <- minValue(present_bioclim)
+
+bioclim.df <- data.frame(extract(stack_bioclim, points))
+colnames(bioclim.df) <- time_periods
+
+buffer.bioclim.df <- extract(stack_bioclim, points, buffer = buffer, fun=max)
+buffer.bioclim.df <- t(buffer.bioclim.df)
+
+bioclim.df2 <- rbind(bioclim.df, time_periods)
+bioclim.df2 <- t(bioclim.df2)
+bioclim.df2 <- cbind(bioclim.df2, buffer.bioclim.df)
+
+colnames(bioclim.df2) <- c("static", "time", "buffer")
+bioclim.df2 <- bioclim.df2[,c("time", "static", "buffer")]
+
+bioclim.df2 <- as.data.frame(bioclim.df2)
+bioclim.df2$static <- as.numeric(as.character(bioclim.df2$static))
+bioclim.df2$time <- as.numeric(as.character(bioclim.df2$time))
+bioclim.df2$buffer <- as.numeric(as.character(bioclim.df2$buffer))
+
+y_min <- (min(c(bioclim.df2$static, present_min))-10)
+y_max <- (max(c(bioclim.df2$buffer), present_max)+200)
+
+plot(bioclim.df2$time, bioclim.df2$static, type = "l", 
+     xlab="Time (kya)", ylab="Temperature Seasonality", 
+     xlim=(c(min(bioclim.df2$time), max(bioclim.df2$time))),
+     ylim=(c(y_min, y_max)),
+     col="blue") 
+
+abline(h=present_min)
+abline(h=present_max)
+
+lines(bioclim.df2$time, bioclim.df2$buffer, type="l",
+      xlim=(c(min(bioclim.df2$time), max(bioclim.df2$time))),
+      ylim=(c(y_min, y_max)),
+      col="darkmagenta")
+
+legend("topright",
+       c("Static", paste("Buffer of", buffer, "m")), # puts text in the legend
+       lty=c(1,1), # gives the legend appropriate symbols (lines)
+       lwd=c(2.5,2.5),col=c("blue", "darkmagenta")) # gives the legend lines the correct color and width
+```
+
+
+
+```{r, echo=FALSE, warning=FALSE, fig.align='center', fig.cap="Figure 9: Plot of the Mean Temperature of the Warmest Quarter for Katherine"}
+bioclim.layer <- "bioclim_10"
+folder <- "C:/Users/Christiana/Documents/gdm/past layers/"
+bioclim <- list()
+
+for (i in time_periods){
+  bioclim[i] <- list.files(path = paste0(folder, i, "/"), pattern = bioclim.layer, 
+                            all.files=TRUE, full.names=TRUE)
+}
+bioclim <- unlist(bioclim)
+bioclim <- sort(bioclim)
+stack_bioclim <- stack(bioclim)
+stack_bioclim <- crop(stack_bioclim, study_extent)
+
+present_bioclim <- raster("C:/Users/Christiana/Documents/gdm/present_layers/bioclim_10.asc")
+present_bioclim <- crop(present_bioclim, study_extent)
+present_max <- maxValue(present_bioclim)
+present_min <- minValue(present_bioclim)
+
+bioclim.df <- data.frame(extract(stack_bioclim, points))
+colnames(bioclim.df) <- time_periods
+
+buffer.bioclim.df <- extract(stack_bioclim, points, buffer = buffer, fun=max)
+buffer.bioclim.df <- t(buffer.bioclim.df)
+
+bioclim.df2 <- rbind(bioclim.df, time_periods)
+bioclim.df2 <- t(bioclim.df2)
+bioclim.df2 <- cbind(bioclim.df2, buffer.bioclim.df)
+
+colnames(bioclim.df2) <- c("static", "time", "buffer")
+bioclim.df2 <- bioclim.df2[,c("time", "static", "buffer")]
+
+bioclim.df2 <- as.data.frame(bioclim.df2)
+bioclim.df2$static <- as.numeric(as.character(bioclim.df2$static))
+bioclim.df2$time <- as.numeric(as.character(bioclim.df2$time))
+bioclim.df2$buffer <- as.numeric(as.character(bioclim.df2$buffer))
+
+y_min <- (min(c(bioclim.df2$static, present_min))-10)
+y_max <- (max(c(bioclim.df2$buffer), present_max)+200)
+
+plot(bioclim.df2$time, bioclim.df2$static, type = "l", 
+     xlab="Time (kya)", ylab="Mean Temperature", 
+     xlim=(c(min(bioclim.df2$time), max(bioclim.df2$time))),
+     ylim=(c(y_min, y_max)),
+     col="blue") 
+
+abline(h=present_min)
+abline(h=present_max)
+
+lines(bioclim.df2$time, bioclim.df2$buffer, type="l",
+      xlim=(c(min(bioclim.df2$time), max(bioclim.df2$time))),
+      ylim=(c(y_min, y_max)),
+      col="darkmagenta")
+
+legend("topright",
+       c("Static", paste("Buffer of", buffer, "m")), # puts text in the legend
+       lty=c(1,1), # gives the legend appropriate symbols (lines)
+       lwd=c(2.5,2.5),col=c("blue", "darkmagenta")) # gives the legend lines the correct color and width
+```
+
+\newpage
+
+##Mapping Bioclim variables through time
+
+We can produce similar maps to those we made before for each of the bioclim variables.
+
+We start by reading in the present data.
+
+```{r}
+present_bioclim <- raster("C:/Users/Christiana/Documents/gdm/present_layers/bioclim_10.asc")
+present_bioclim <- crop(present_bioclim, study_extent)
+```
+
+We then create a stack of the past layers
+
+```{r, warning=FALSE}
+bioclim.layer <- "bioclim_10"
+folder <- "C:/Users/Christiana/Documents/gdm/past layers/"
+bioclim <- list()
+
+for (i in time_periods){
+  bioclim[i] <- list.files(path = paste0(folder, i, "/"), pattern = bioclim.layer, 
+                            all.files=TRUE, full.names=TRUE)
+}
+bioclim <- unlist(bioclim)
+bioclim <- sort(bioclim)
+stack_bioclim <- stack(bioclim)
+stack_bioclim <- crop(stack_bioclim, study_extent)
+```
+
+We can apply the stability function.
+
+```{r}
+result <- stab.func(present_bioclim, stack_bioclim)
+```
+
+Then I can calculate the arithmetic mean:
+
+```{r}
+stab_arithmean <- calc(result, fun=mean)
+```
+```{r, echo=FALSE, fig.align='center', fig.cap="Figure 10: Arithmetic mean of dissimilarity for Bioclim10. More positive means more dissimilar"}
+plot(stab_arithmean, col=terrain.colors(255))
+```
+
+
+We can also do this for the other two Bioclim variables.
+
+Firstly for Temperature seasonality:
+
+```{r, echo=FALSE, warning=FALSE}
+present_bioclim <- raster("C:/Users/Christiana/Documents/gdm/present_layers/bioclim_04.asc")
+present_bioclim <- crop(present_bioclim, study_extent)
+
+bioclim.layer <- "bioclim_04"
+folder <- "C:/Users/Christiana/Documents/gdm/past layers/"
+bioclim <- list()
+
+for (i in time_periods){
+  bioclim[i] <- list.files(path = paste0(folder, i, "/"), pattern = bioclim.layer, 
+                            all.files=TRUE, full.names=TRUE)
+}
+bioclim <- unlist(bioclim)
+bioclim <- sort(bioclim)
+stack_bioclim <- stack(bioclim)
+stack_bioclim <- crop(stack_bioclim, study_extent)
+
+result <- stab.func(present_bioclim, stack_bioclim)
+
+stab_arithmean <- calc(result, fun=mean)
+```
+
+
+
+```{r, echo=FALSE, fig.align='center', fig.cap="Figure 11: Arithmetic mean of dissimilarity for Bioclim04. More positive means more dissimilar"}
+plot(stab_arithmean, col=terrain.colors(255))
+```
+
+
+And then for Annual Precipitation:
+
+```{r, echo=FALSE, warning=FALSE}
+present_bioclim <- raster("C:/Users/Christiana/Documents/gdm/present_layers/bioclim_12.asc")
+present_bioclim <- crop(present_bioclim, study_extent)
+
+bioclim.layer <- "bioclim_12"
+folder <- "C:/Users/Christiana/Documents/gdm/past layers/"
+bioclim <- list()
+
+for (i in time_periods){
+  bioclim[i] <- list.files(path = paste0(folder, i, "/"), pattern = bioclim.layer, 
+                            all.files=TRUE, full.names=TRUE)
+}
+bioclim <- unlist(bioclim)
+bioclim <- sort(bioclim)
+stack_bioclim <- stack(bioclim)
+stack_bioclim <- crop(stack_bioclim, study_extent)
+
+result <- stab.func(present_bioclim, stack_bioclim)
+
+stab_arithmean <- calc(result, fun=mean)
+```
+
+
+
+```{r, echo=FALSE, fig.align='center', fig.cap="Figure 12: Arithmetic mean of dissimilarity for Bioclim12. More positive means more dissimilar"}
+plot(stab_arithmean, col=terrain.colors(255))
+```

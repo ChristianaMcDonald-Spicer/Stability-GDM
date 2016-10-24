@@ -38,11 +38,11 @@ time_periods <- c("002", "004", "006", "008", "010", "012", "014", "016", "018",
 
 ##set the coordinates to plot
 #give longitude and then latitude
-coords <- data.frame(132.27, -14.45)
+coords <- data.frame(125, -17.03)
 
 ##set the buffer for the stability analysis
 #measured in the units of your raster files, usually metres
-buffer <- 10000
+buffer <- 50000
 
 ############################## Step 2 - Read in data for the present day ##############################
 
@@ -147,16 +147,20 @@ View(stability.df2)
 
 ##Set up the plot using the static suitability measure
 plot(stability.df2$time, stability.df2$static, type = "l", 
-     xlab="Time (kya)", ylab="Stability", 
-     xlim=(c(min(stability.df2$time), max(stability.df2$time))), 
-     #ylim=c(-1, 0), 
+     xlab="Time (kya)", ylab="Dissimilarity to present", 
+     #xlim=(c(min(stability.df2$time), max(stability.df2$time))),
+     #xlim=(c(min(stability.df2$time), 80)),
+     xlim=(c(5, 40)),
+     #ylim=c(-0.3, 0), 
      col="blue") 
 
 ##Plot the buffer suitability on the same plot
 lines(stability.df2$time, stability.df2$buffer, type="l", 
       #axes=FALSE, 
-      xlim=(c(min(stability.df2$time), max(stability.df2$time))), 
-      #ylim=c(-1, 0), 
+      #xlim=(c(min(stability.df2$time), max(stability.df2$time))),
+      #xlim=(c(min(stability.df2$time), 80)),
+      xlim=(c(5, 40)),
+      #ylim=c(-0.3, 0), 
       col="darkmagenta")
 
 ##Include a legend
