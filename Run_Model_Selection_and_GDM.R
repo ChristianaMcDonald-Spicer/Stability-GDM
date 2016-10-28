@@ -34,12 +34,12 @@ setwd(choose.dir())
 dir.create(file.path(".", "Output"))
 
 ##set paths for files and folders
-species_data <- "./Data/KW_data_rounded_to_0.041.csv"
-present_enviro_folder <- "./Data/present_layers/"
+species_data <- "./Input Data/KW_data_rounded_to_0.041.csv"
+present_enviro_folder <- "./Input Data/present_layers/"
 
 ##set file path for other time periods
 #this should contain subdirectories for each time period
-other_times_folder <- "./Data/past layers/"
+other_times_folder <- "./Input Data/past layers/"
 
 ##set the extent of your study area
 #this may be the same extent as your rasters or smaller if you need to crop them

@@ -28,7 +28,7 @@ library(raster)
 ##set path for folder containing transformed rasters
 #each raster must contain the name of the time period, as given in "time_periods" below
 #must contain data from the present day, with "present" in the name
-data_folder <- "//franklin.uds.anu.edu.au/home/u5596907/My Documents/Identifying stability/Data/transformed rasters/"
+data_folder <- "C:/Users/Christiana/Documents/Identifying stability/Data/transformed rasters/"
 
 ##list the time periods in the analysis
 #these must match the names of the raster files
@@ -38,7 +38,7 @@ time_periods <- c("002", "004", "006", "008", "010", "012", "014", "016", "018",
 
 ##set the coordinates to plot
 #give longitude and then latitude
-coords <- data.frame(125, -17.03)
+coords <- data.frame(130.846, -12.46)
 
 ##set the buffer for the stability analysis
 #measured in the units of your raster files, usually metres
@@ -83,7 +83,7 @@ run.stab.func <- function(present, time, folder){
   result <- stab.func(present, stack_rasters)
   
   #apply GDM link function
-  result <- 1 - exp(result)
+  result <- 1 - exp(-1 * result)
 }
 
 
@@ -119,9 +119,9 @@ stability.df <- cbind("000" = 0, stability.df)
 View(stability.df)
 
 ##Make a dataframe for stability using buffer
-buffer.df <- extract(stab.rasters, points, buffer = buffer, fun=max)
+buffer.df <- extract(stab.rasters, points, buffer = buffer, fun=min)
+colnames(buffer.df) <- time_periods
 buffer.df <- cbind("000" = 0, buffer.df)
-buffer.df <- t(buffer.df)
 View(buffer.df)
 
 ##Add the present to the list of time periods
@@ -130,9 +130,8 @@ time_periods_0 <- c(n, time_periods)
 
 ##Prepare the dataframes
 #Combine the two types of stability with the time periods 
-stability.df2 <- rbind(stability.df, time_periods_0)
+stability.df2 <- rbind(stability.df, time_periods_0, buffer.df)
 stability.df2 <- t(stability.df2)
-stability.df2 <- cbind(stability.df2, buffer.df)
 #give useful column names and reorder columns
 colnames(stability.df2) <- c("static", "time", "buffer")
 stability.df2 <- stability.df2[,c("time", "static", "buffer")]
@@ -148,18 +147,18 @@ View(stability.df2)
 ##Set up the plot using the static suitability measure
 plot(stability.df2$time, stability.df2$static, type = "l", 
      xlab="Time (kya)", ylab="Dissimilarity to present", 
-     #xlim=(c(min(stability.df2$time), max(stability.df2$time))),
+     xlim=(c(min(stability.df2$time), max(stability.df2$time))),
      #xlim=(c(min(stability.df2$time), 80)),
-     xlim=(c(5, 40)),
+     #xlim=(c(5, 40)),
      #ylim=c(-0.3, 0), 
      col="blue") 
 
 ##Plot the buffer suitability on the same plot
 lines(stability.df2$time, stability.df2$buffer, type="l", 
       #axes=FALSE, 
-      #xlim=(c(min(stability.df2$time), max(stability.df2$time))),
+      xlim=(c(min(stability.df2$time), max(stability.df2$time))),
       #xlim=(c(min(stability.df2$time), 80)),
-      xlim=(c(5, 40)),
+      #xlim=(c(5, 40)),
       #ylim=c(-0.3, 0), 
       col="darkmagenta")
 

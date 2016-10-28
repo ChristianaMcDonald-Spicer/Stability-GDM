@@ -2,7 +2,7 @@
 title: "Testing Stability"
 author: "Christiana McDonald-Spicer"
 date: "20 October 2016"
-output: pdf_document
+output: html_document
 ---
 #Testing stability
 
@@ -75,7 +75,7 @@ run.stab.func <- function(present, time, folder){
   result <- stab.func(present, stack_rasters)
   
   #apply GDM link function
-  result <- 1 - exp(result)
+  result <- 1 - exp(-1 * result)
 }
 ```
 
