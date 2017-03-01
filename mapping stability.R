@@ -1,3 +1,10 @@
+##input the data
+input.dir <- "//franklin.uds.anu.edu.au/home/u5596907/My Documents/Identifying stability/Output/rasters/"
+rasters <- list.files(path = input.dir, pattern = "stability")
+rasters <- sort(rasters)
+rasters <- paste(input.dir, rasters, sep="")
+stab.rasters <- stack(rasters)
+
 ##crop to extent
 study_extent <- c(111, 156, -25.5, -9.008331)
 stab.rasters.crop <- crop(stab.rasters, study_extent)
